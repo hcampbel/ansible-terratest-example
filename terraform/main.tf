@@ -13,7 +13,7 @@ terraform {
 }
 
 provider "aws" {
-  region                  = var.region
+  region                  = var.aws_region
   shared_credentials_file = var.creds
 }
 
@@ -70,12 +70,12 @@ resource "aws_security_group" test_sg {
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# LOOK UP THE LATEST CENTOS AMI
+# LOOK UP THE LATEST CENTOS AMI WITH ANSIBLE 2.9 INSTALLED
 # ---------------------------------------------------------------------------------------------------------------------
 
 data "aws_ami" "centos" {
   most_recent = true
-  owners      = ["125523088429"] # CentOS
+  owners      = ["978816831872"] # CentOS
 
   filter {
     name   = "virtualization-type"
@@ -94,7 +94,7 @@ data "aws_ami" "centos" {
 
   filter {
     name   = "name"
-    values = ["CentOS 8.3.2011 x86_64"]
+    values = ["CentOS-8.3-Ansible-2.9"]
   }
 }
 

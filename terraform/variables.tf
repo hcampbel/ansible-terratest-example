@@ -1,8 +1,9 @@
 variable "creds" {
+  description = "Location of credentials to use"
   type = string
 }
 
-variable "region" {
+variable "aws_region" {
   type    = string
   default = "us-east-1"
 }
