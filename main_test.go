@@ -2,6 +2,9 @@ package ansible_terratest_example
 
 import (
 	"fmt"
+	"io/ioutil"
+	_ "log"
+	"os"
 	_ "os"
 	"strings"
 	"testing"
@@ -12,6 +15,7 @@ import (
 	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/gruntwork-io/terratest/modules/ssh"
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	cmdShell "github.com/gruntwork-io/terratest/modules/shell"
 	testStructure "github.com/gruntwork-io/terratest/modules/test-structure"
 )
 
@@ -60,13 +64,12 @@ func TestTerraformSshExample(t *testing.T) {
 		keyPair := testStructure.LoadEc2KeyPair(t, exampleFolder)
 
 		testSSHToPublicHost(t, terraformOptions, keyPair)
-		// testSSHToPrivateHost(t, terraformOptions, keyPair)
 		testSSHAgentToPublicHost(t, terraformOptions, keyPair)
-		// testSSHAgentToPrivateHost(t, terraformOptions, keyPair)
-		// testSCPToPublicHost(t, terraformOptions, keyPair)
+		testAnsibleAgainstPublicHost(t, terraformOptions, keyPair)
 	})
 
 }
+
 
 func configureTerraformOptions(t *testing.T, exampleFolder string) (*terraform.Options, *aws.Ec2Keypair) {
 	// A unique ID we can use to namespace resources so we don't clash with anything already in the AWS account or
@@ -122,7 +125,7 @@ func testSSHAgentToPublicHost(t *testing.T, terraformOptions *terraform.Options,
 
 	// It can take a minute or so for the Instance to boot up, so retry a few times
 	maxRetries := 30
-	timeBetweenRetries := 5 * time.Second
+	timeBetweenRetries := 15 * time.Second
 	description := fmt.Sprintf("SSH with Agent to public host %s", publicInstanceIP)
 
 	// Run a simple echo command on the server
@@ -160,7 +163,7 @@ func testSSHToPublicHost(t *testing.T, terraformOptions *terraform.Options, keyP
 
 	// It can take a minute or so for the Instance to boot up, so retry a few times
 	maxRetries := 30
-	timeBetweenRetries := 5 * time.Second
+	timeBetweenRetries := 15 * time.Second
 	description := fmt.Sprintf("SSH to public host %s", publicInstanceIP)
 
 	// Run a simple echo command on the server
@@ -182,7 +185,7 @@ func testSSHToPublicHost(t *testing.T, terraformOptions *terraform.Options, keyP
 		return "", nil
 	})
 
-	// Run a command on the server that results in an error,
+	// Run Ansible command against the server
 	expectedText = "Hello, World"
 	command = fmt.Sprintf("echo -n '%s' && exit 1", expectedText)
 	description = fmt.Sprintf("SSH to public host %s with error command", publicInstanceIP)
@@ -202,4 +205,43 @@ func testSSHToPublicHost(t *testing.T, terraformOptions *terraform.Options, keyP
 
 		return "", nil
 	})
+}
+
+func testAnsibleAgainstPublicHost(t *testing.T, terraformOptions *terraform.Options, keyPair *aws.Ec2Keypair) {
+	// Run `terraform output` to get the value of an output variable
+	var ansibleCmd cmdShell.Command
+
+	publicInstanceIP := terraform.Output(t, terraformOptions, "public_instance_ip")
+	// inventoryFileName := "hosts"
+	successText := fmt.Sprintf("%s | SUCCESS => {\"ansible_facts\": {     \"discovered_interpreter_python\": \"/usr/libexec/platform-python\"   },   \"changed\": false,    \"ping\": \"pong\"}", publicInstanceIP)
+
+	tmpFile, err := ioutil.TempFile(".", "hosts")
+
+	if err != nil {
+		fmt.Errorf("%s", err)
+		return
+	}
+
+	defer os.Remove(tmpFile.Name())
+	fmt.Println("Created File: " + tmpFile.Name())
+
+	text := []byte("[all]\n"+publicInstanceIP)
+	if _, err = tmpFile.Write(text); err != nil {
+		fmt.Errorf("%s", err)
+		return
+	}
+
+	if err = tmpFile.Close(); err != nil {
+		fmt.Errorf("%s", err)
+	}
+
+	ansibleCmd = cmdShell.Command{Command: "ansible", Args: []string{ "-i", tmpFile.Name(), "-m", "ping", "all", "-u", "centos"}, WorkingDir: "."}
+
+	fmt.Println("Executing Ansible Test...")
+	actualText, ansibleCmdErr := cmdShell.RunCommandAndGetOutputE(t, ansibleCmd)
+
+	if strings.TrimSpace(actualText) != successText {
+		fmt.Errorf("Expected command to return '%s' but got '%s'", successText, ansibleCmdErr)
+		return
+	}
 }
