@@ -1,6 +1,7 @@
 variable "creds" {
   description = "Location of credentials to use"
   type = string
+  default = "/home/hugh/.aws/credentials"
 }
 
 variable "aws_region" {
@@ -28,4 +29,5 @@ variable "instance_name" {
 variable "subnet" {
   description = "The subnet id to use"
   type        = string
+  default = "subnet-0b942cecf2893a335"
 }
